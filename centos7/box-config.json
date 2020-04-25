@@ -17,6 +17,11 @@
       "type": "shell",
       "execute_command": "echo 'vagrant' | {{.Vars}} sudo -S -E bash '{{.Path}}'",
       "script": "scripts/cleanup.sh"
+    },
+    {
+      "type": "shell",
+      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -S -E bash '{{.Path}}'",
+      "script": "scripts/customize.sh"
     }
   ],
   "builders": [
@@ -67,11 +72,6 @@
       {
         "output": "builds/{{.Provider}}-centos7.box",
         "type": "vagrant"
-      },
-      {
-        "type": "vagrant-cloud",
-        "box_tag": "geerlingguy/centos7",
-        "version": "{{user `version`}}"
       }
     ]
   ]
