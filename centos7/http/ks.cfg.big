@@ -1,0 +1,132 @@
+install
+cdrom
+lang en_US.UTF-8
+keyboard us
+unsupported_hardware
+network --bootproto=dhcp
+rootpw vagrant
+firewall --enabled --ssh --port=4242
+selinux --enforcing
+timezone CST6CDT
+unsupported_hardware
+bootloader --location=mbr
+text
+skipx
+zerombr
+clearpart --all --initlabel
+autopart
+auth --enableshadow --passalgo=sha512 --kickstart
+firstboot --disabled
+eula --agreed
+services --enabled=NetworkManager,sshd --disabled=postfix,rpcbind,rpcbind.socket
+reboot
+user --name=vagrant --plaintext --password=vagrant --groups=vagrant,wheel
+
+%packages --ignoremissing --excludedocs
+@Base
+@Core
+openssh-clients
+openssl
+sudo
+net-tools
+vim-enchanced
+bind-utils
+net-tools
+policycoreutils-python
+chrony
+epel-release
+figlet
+screen
+wget
+curl
+rsync
+
+
+# unnecessary firmware
+-aic94xx-firmware
+-atmel-firmware
+-b43-openfwwf
+-bfa-firmware
+-ipw2100-firmware
+-ipw2200-firmware
+-ivtv-firmware
+-iwl100-firmware
+-iwl1000-firmware
+-iwl3945-firmware
+-iwl4965-firmware
+-iwl5000-firmware
+-iwl5150-firmware
+-iwl6000-firmware
+-iwl6000g2a-firmware
+-iwl6050-firmware
+-libertas-usb8388-firmware
+-ql2100-firmware
+-ql2200-firmware
+-ql23xx-firmware
+-ql2400-firmware
+-ql2500-firmware
+-rt61pci-firmware
+-rt73usb-firmware
+-xorg-x11-drv-ati-firmware
+-zd1211-firmware
+%end
+
+%post
+yum update -y
+
+# update root certs
+wget -O/etc/pki/tls/certs/ca-bundle.crt http://curl.haxx.se/ca/cacert.pem
+
+# sudo
+yum install -y sudo
+echo "vagrant        ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers.d/vagrant
+sed -i "s/^.*requiretty/#Defaults requiretty/" /etc/sudoers
+
+# setup our skel & profile.d
+mkdir /tmp/build
+wget -O /tmp/build/skel.zip https://github.com/gpanula/skel/archive/master.zip
+unzip /tmp/build/skel.zip -d /etc
+mv /etc/skel /etc/skel.orig
+mv /etc/skel-master /etc/skel
+rm -f /etc/skel/LICENSE
+rm -f /etc/skel/.LICENSE
+rm -f /etc/skel/README.md
+chmod 640 /etc/skel/.ssh/authorized_keys2
+
+mv /root/.bashrc /root/.bashrc.orig
+cp /etc/skel/.bashrc /root/.bashrc
+cp /etc/skel/.vimrc /root/.vimrc
+sed -i '/set-git-info/s/^/#/' /root/.bashrc
+mkdir /root/.ssh
+chmod 0600 /root/.ssh
+cp /etc/skel/.ssh/authorized_keys2 /root/.ssh/authorized_keys2
+ln -s /root/.ssh/authorized_keys2 /root/.ssh/authorized_keys
+
+wget -O /tmp/build/profile.d.zip https://github.com/gpanula/profile.d/archive/master.zip
+unzip /tmp/build/profile.d.zip -d /tmp/build
+cp /tmp/build/profile.d-master/* /etc/profile.d/
+rm -f /etc/profile.d/README.md
+
+# customize sshd
+mv sshd_config sshd_config.orig
+wget -O /etc/ssh/sshd_config https://raw.githubusercontent.com/gpanula/server_base/master/sshd_config
+chmod 600 /etc/ssh/sshd_config
+awk '$5 >= 3071' /etc/ssh/moduli > /etc/ssh/moduli.tmp && mv /etc/ssh/moduli /etc/ssh/moduli.OLD && mv /etc/ssh/moduli.tmp /etc/ssh/moduli
+semanage port -a -t ssh_port_t -p tcp 4242
+
+# dynamic motd
+[ -e /etc/motd ] && mv /etc/motd /etc/motd.orig
+# Put "dynamic" motd in place
+wget -O /usr/local/etc/system-location https://raw.githubusercontent.com/gpanula/server_base/master/system-location
+wget -O /usr/local/etc/system-announcement https://raw.githubusercontent.com/gpanula/server_base/master/system-announcement
+wget -O /etc/systemd/system/dynamotd.service https://raw.githubusercontent.com/gpanula/server_base/master/dynamotd.service
+wget -O /etc/systemd/system/dynamotd.timer https://raw.githubusercontent.com/gpanula/server_base/master/dynamotd.timer
+wget -O /usr/local/bin/dynamotd.sh https://raw.githubusercontent.com/gpanula/server_base/master/dynamotd.sh
+chmod +x /usr/local/bin/dynamotd.sh
+systemctl daemon-reload
+systemctl enable dynamotd.timer
+systemctl start dynamotd.service
+ln -s /var/run/motd /etc/motd
+
+yum clean all
+%end
